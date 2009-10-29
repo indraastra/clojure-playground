@@ -1,0 +1,3 @@
+[submodule "programming-clojure"]
+	path = programming-clojure
+	url = git://github.com/stuarthalloway/programming-clojure.git
