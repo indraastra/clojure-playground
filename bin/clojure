@@ -35,10 +35,10 @@ jars() {
 
 this=$bin/..
 HADOOP_SVN=~/hadoop
+JYTHON_HOME=$HADOOP_SVN/thirdparty/jython
 HADOOP_HOME=$HADOOP_SVN/thirdparty/hadoop
+HAPPY_HOME=$HADOOP_SVN/thirdparty/happy
 PROG_CLOJ=$this/programming-clojure
-CP=`jars $PROG_CLOJ/lib`:`jars $HADOOP_HOME`:`jars $HADOOP_SVN/bin`
+CP=`jars $PROG_CLOJ/lib`:`jars $HADOOP_HOME`:`jars $HADOOP_SVN/bin`:`jars $HAPPY_HOME`:`jars $JYTHON_HOME`
 
-echo $CP
-
-java -cp $CP:$PROG_CLOJ/classes:$this/experiments:$this/transform jline.ConsoleRunner clojure.lang.Repl
+java -cp $CP:$PROG_CLOJ/classes:$this/src/ jline.ConsoleRunner clojure.lang.Repl
