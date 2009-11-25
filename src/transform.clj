@@ -1,132 +1,56 @@
 (ns transform
-  (:use [clojure.set :only (union)]
-        [clojure.contrib.duck-streams :only (read-lines)]
-	[clojure.contrib.json.read :only (read-json)]
-	[clojure.contrib.datalog.database :only (make-database add-tuples)])
-  (:import [com.metaweb.hadoop.bfg BFGMem Triple]))
+  (:gen-class)
+  (:use [clojure.contrib.fcase :only (case)])
+  (:require [clojure-hadoop.wrap :as wrap]
+            [clojure-hadoop.defjob :as defjob]))
 
-; storage
-(defn bfg-store 
-  ([] (BFGMem.))
-  ([triples]
-     (let [bfg (BFGMem.)]
-       (dorun (for [t triples] (. bfg add t)))
-       bfg)))
+(defmacro s [_s]
+  [_s :p :o])
 
-(def clj-base
-     (make-database 
-      (relation :triple [:s :p :o])
-      (index :triple :s)
-      (index :triple :p)
-      (index :triple :o)))
+(defmacro p [_p]
+  [:s _p :o])
 
-(defn clj-store [triples]
-  (apply add-tuples clj-base triples))
+(defmacro o [_o]
+  [:s :p _o])
 
-(defn triple->map [triple]
-  {:s (.getSub triple)
-   :p (.getPred triple)
-   :o (.getObj triple)})
+(defn relabel-nodes- [[in out]]
+  `((:rule (:match   ~(s in))
+           (:rewrite ~(s out)))
+    (:rule (:match   ~(o in))
+           (:rewrite ~(o out)))))
 
-(defn triple->vec [triple]
-  [(.getSub triple)
-   (.getPred triple)
-   (.getObj triple)])
+(defn relabel-nodes [pairs]
+  (apply concat (map relabel-nodes- pairs)))
 
-(defn map->triple [spo]
-  (Triple. spo))
+(defn relabel-edges- [[in out]]
+  `(:rule (:match   ~(p in))
+          (:rewrite ~(p out))))
 
-(defn read-json-lines [file]
-  (map read-json (read-lines file)))
+(defn relabel-edges [pairs]
+  (map relabel-edges- pairs))
 
-(defn bfg-triples [file]
-  (map map->triple (read-json-lines file)))
+(defn match-rewrite- [[in out]]
+  `(:rule (:match   ~in)
+          (:rewrite ~out)))
 
+(defn match-rewrite [pairs]
+  (map match-rewrite- pairs))
 
-; query
-(defn get-bindings [triple]
-     (set (filter keyword? triple)))
+(def rule-compilers 
+     {:relabel-nodes relabel-nodes
+      :relabel-edges relabel-edges
+      :match-rewrite match-rewrite
+      :rule          list})
 
-(defn triples- [store [s p o]]
-  (iterator-seq (. store query s p o)))
+(defmacro transform [& rules]
+  (loop [rules (seq rules)
+         crules []]
+    (if (not (empty? rules))
+      (let [[rule-type & rule-body] (first rules)
+            rule-compiler (rule-compilers rule-type)]
+        (recur (rest rules)
+               (into crules (rule-compiler rule-body))))
+      `(quote ~crules))))
+        
 
-(defn triples [store s p o]
-  (map triple->map (query- store [s p o])))
-
-(defmacro compile-query [store ids start & query]
-  (let [bindings (apply union (map get-bindings query))]
-    bindings))
-
-
-(defn nullify-free-vars [query]
-  (map #(if (keyword? %) nil %) query))
-
-
-(defn substitute-with [bindings queries]
-  (map #(replace bindings %) queries))
-
-(defn partition-with [pred coll]
-  (loop [l []
-	 r []
-	 hd (first coll)
-	 tl (rest coll)]
-    (if hd
-      (if (pred hd)
-	(recur (conj l hd) r (first tl) (rest tl))
-	(recur l (conj r hd) (first tl) (rest tl)))
-      [l r])))
-
-(defn zip [& seqs]
-  (lazy-seq 
-   (when (and (seq seqs) (seq (first seqs)))
-     (cons (map first seqs)
-	   (apply zip (map rest seqs))))))
-
-
-(defn match [pattern instance]
-  (loop [bindings {}
-	 pattern pattern
-	 instance instance]
-    (let [p (first pattern)
-	  i (first instance)]
-      (if (and p i)
-	(recur (if (keyword? p) (assoc bindings p i) bindings)
-	       (rest pattern)
-	       (rest instance))
-	bindings))))
-
-
-(declare run-query-)
-
-(defn run-subquery- [store query queries bindings triples]
-  (let [bfg-query (nullify-free-vars query)]
-    (dorun (for [bfg-triple (triples- store bfg-query)]
-	     (let [triple     (triple->vec bfg-triple)
-		   bindings-δ (match query triple)
-		   bindings+  (into bindings bindings-δ)]
-	       (do 
-		 (. triples add bfg-triple)
-		 (run-query- store queries bindings+ triples)))))
-    triples))
-
-
-(defn has-unbound? [clause bindings]
-  (some #(and (keyword? %)
-	      (not (find bindings %)))
-	clause))
-
-
-(defn run-query- [store queries bindings triples]
-  ; execute subqueries of relevant queries
-  (let [[relevant _] (partition-with #(has-unbound? % bindings) queries)]
-    (when-let [bound-subqueries (seq (substitute-with bindings relevant))]
-      (dorun (for [query bound-subqueries]
-	       (run-subquery- store query queries bindings triples))))
-    triples))
-
-
-(defn run-query [store ids start & queries]
-  (let [result (BFGMem.)]
-    (dorun (for [id ids] (run-query- store queries {start id} result)))
-    result))
-  
+(defmacro apply-transform [xform graph] )

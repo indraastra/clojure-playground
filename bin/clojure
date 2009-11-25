@@ -39,6 +39,7 @@ JYTHON_HOME=$HADOOP_SVN/thirdparty/jython
 HADOOP_HOME=$HADOOP_SVN/thirdparty/hadoop
 HAPPY_HOME=$HADOOP_SVN/thirdparty/happy
 PROG_CLOJ=$this/programming-clojure
-CP=`jars $PROG_CLOJ/lib`:`jars $HADOOP_HOME`:`jars $HADOOP_SVN/bin`:`jars $HAPPY_HOME`:`jars $JYTHON_HOME`
+HADOOP_CLOJ=~/clojure-hadoop/target/clojure-hadoop-1.0-SNAPSHOT.jar
+CP=$HADOOP_CLOJ:`jars $PROG_CLOJ/lib`:`jars $HADOOP_HOME`:`jars $HADOOP_HOME/lib`:`jars $HADOOP_SVN/bin`:`jars $HAPPY_HOME`:`jars $JYTHON_HOME`
 
-java -cp $CP:$PROG_CLOJ/classes:$this/src/ jline.ConsoleRunner clojure.lang.Repl
+$JAVA_HOME/bin/java -cp $CP:$PROG_CLOJ/classes:$this/src/ jline.ConsoleRunner clojure.lang.Repl

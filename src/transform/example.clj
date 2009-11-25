@@ -1,20 +1,40 @@
 (ns transform.example
-  (:use [transform :only (bfg-triples bfg-store triples run-query)]))
+  (:use [transform]))
 
-(def my-triples (bfg-triples "data/5editions.json"))
-(def my-db (bfg-store my-triples))
-(def ol-ids 
-     (map :s (triples my-db nil "ol:id" nil)))
+(def >isbn> "/book/book_edition/ISBN")
 
-(def my-query 
-     [[:b "ol:id" :uid]
-      [:b "ol:isbn_10" :isbn10]
-      [:b "ol:isbn_13" :isbn13]])
+(defn url->webpage [] )
+(defn titleparts->title [] )
+(defn clean-ISBN [] )
+(defn clean-pubdate [] )
+(defn produce-pagination)
 
-(def result (run-query my-db ol-ids :b 
-		       [:b "ol:id" :uid]
-		       [:b "ol:isbn_10" :isbn10]
-		       [:b "ol:isbn_13" :isbn13]))
+(def my-graph "/user/vishal/openlibrary/edition-triples")
 
+(def my-transform 
+     (transform (:relabel-nodes [#"/a/(.*)" "/authority/openlibrary/author/\\1"]
+                                [#"/b/(.*)" "/authority/openlibrary/edition/\\1"])
+                (:relabel-edges ["ol:publishers"         "ol:PUBLISHER"]
+                                ["ol:authors"            "ol:AUTHOR"]
+                                ["ol:isbn_10"            >isbn>]
+                                ["ol:isbn_13"            >isbn>]
+                                ["ol:lc_classifications" "/book/book_edition/lcc"]
+                                ["ol:lccn"               "/book/book_edition/LCCN"]
+                                ["ol:oclc_numbers"       "/book/book_edition/OCLC_number"]
+                                ["ol:other_titles"       "/common/topic/alias"])
+                (:rule (:match   [:s "ol:id" :o])
+                       (:produce [:s "/type/object/type" "/book/book_edition"]
+                                 [:s "/type/object/type" "/common/topic"]))
+                (:rule (:match   [:s "ol:url" :url])
+                       (:rewrite [:s "/common/topic/webpage" url->webpage]))
+                (:rule (:match   [:s "ol:title" :title]
+                                 [:s "ol:subtitle" :subtitle]
+                                 [:s "ol:title_prefix" :title-prefix])
+                       (:rewrite titleparts->title))
+                (:match-rewrite [(p "/book/book_edition/isbn") clean-ISBN
+                                 (p "ol:publish_date")         clean-pubdate])
+                (:rule (:match   (p "ol:pagination")
+                                 (p "ol:number_of_pages"))
+                       (:rewrite produce-pagination))))
 
-
+(apply-transform my-transform my-graph)
